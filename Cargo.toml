@@ -1,0 +1,10 @@
+[package]
+name = "knn"
+version = "0.1.0"
+authors = ["Jomaro Rodrigues <jomaro.rodrigues@gmail.com>"]
+
+[dependencies]
+byteorder = "1"
+rayon = "1.0.1"
+rulinalg = "0.4.2"
+
