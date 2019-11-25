@@ -18,100 +18,99 @@ use std::process::exit;
 
 
 #[derive(Debug)]
-struct Data {
+struct PredictorData {
 
-	d : usize,
-	c : usize,
+	line_length : usize,
+	max_label : usize,
 
-	data : Vec<f64>,
-	rotulos : Vec<i32>,
-	test : Vec<f64>,
-	rotulos_test : Vec<i32>,
+	given_points : Vec<f64>,
+	given_labels : Vec<u32>,
+	points_to_process : Vec<f64>,
+	benchmark_labels : Vec<u32>,
 }
 
-//-> (i32, i32, i32, i32, Vec<f64>, Vec<i32>, Vec<f64>, Vec<i32>)
-fn read_files(a : &str, b : &str) -> Data {
-	let mut f = File::open(a).expect("Não abriu arquivo de dados");
+fn read_files(know_points_filename : &str, classified_labels_filename : &str) -> PredictorData {
+	let mut f = File::open(know_points_filename).expect("Não abriu arquivo de dados");
 
-	let n = f.read_i32::<LittleEndian>().expect("Não conseguiu ler N");
+	let n = f.read_u32::<LittleEndian>().expect("Não conseguiu ler N");
 
-	let m = f.read_i32::<LittleEndian>().expect("Não conseguiu ler M");
+	let m = f.read_u32::<LittleEndian>().expect("Não conseguiu ler M");
 
-	let d = f.read_i32::<LittleEndian>().expect("Não conseguiu ler D");
+	let d = f.read_u32::<LittleEndian>().expect("Não conseguiu ler D");
 
-	let c = f.read_i32::<LittleEndian>().expect("Não conseguiu ler C");
+	let c = f.read_u32::<LittleEndian>().expect("Não conseguiu ler C");
 
-	let mut data         = Vec::with_capacity((n*d) as usize);
-	let mut rotulos      = Vec::with_capacity(n as usize);
-	let mut test         = Vec::with_capacity((m*d) as usize);
-	let mut rotulos_test = Vec::with_capacity(m as usize);
+	let mut given_points      = Vec::with_capacity((n*d) as usize);
+	let mut given_labels      = Vec::with_capacity(n as usize);
+	let mut points_to_process = Vec::with_capacity((m*d) as usize);
+	let mut benchmark_labels  = Vec::with_capacity(m as usize);
 
 
-	data.resize((n*d) as usize, 0f64);
-	rotulos.resize(n as usize, 0i32);
+	given_points.resize((n*d) as usize, 0f64);
+	given_labels.resize(n as usize, 0u32);
 
-	test.resize((m*d) as usize, 0f64);
-	rotulos_test.resize(m as usize, 0i32);
+	points_to_process.resize((m*d) as usize, 0f64);
+	benchmark_labels.resize(m as usize, 0u32);
 
 	//f.read(base.as_mut_slice() as &mut [u8]);
 	//f.read(rotulos.as_mut_slice());
-	f.read_f64_into::<LittleEndian>(data.as_mut_slice()).expect("deu problema 1");
-	f.read_i32_into::<LittleEndian>(&mut rotulos).expect("deu problema 2");
-	f.read_f64_into::<LittleEndian>(test.as_mut_slice()).expect("deu problema 3");
+	f.read_f64_into::<LittleEndian>(given_points.as_mut_slice()).expect("deu problema 1");
+	f.read_u32_into::<LittleEndian>(&mut given_labels).expect("deu problema 2");
+	f.read_f64_into::<LittleEndian>(points_to_process.as_mut_slice()).expect("deu problema 3");
 
-	let mut f = File::open(b).expect("Não abriu arquivo de teste");
+	let mut f = File::open(classified_labels_filename).expect("Não abriu arquivo de teste");
 
-	let m2 = f.read_i32::<LittleEndian>().expect("Os dados tem tamanhos diferentes");
+	let m2 = f.read_u32::<LittleEndian>().expect("Os dados tem tamanhos diferentes");
 	if m2 != m {
 		panic!("Os dados tem tamanhos diferentes")
 	};
 
-	f.read_i32_into::<LittleEndian>(&mut rotulos_test).expect("não conseguiu ler rotulos");
+	f.read_u32_into::<LittleEndian>(&mut benchmark_labels).expect("não conseguiu ler rotulos");
 
-	Data {
-		d: d as usize,
-		c: c as usize,
-		data: data,
-		rotulos: rotulos,
-		test: test,
-		rotulos_test: rotulos_test
+	PredictorData {
+		line_length: d as usize,
+		max_label: c as usize,
+		given_points: given_points,
+		given_labels: given_labels,
+		points_to_process: points_to_process,
+		benchmark_labels: benchmark_labels
 	}
 }
 
 
-fn predict(x : &[f64], k : usize, data_ : &Data) -> i32 {
+fn predict(point_to_classify : &[f64], k : usize, data_ : &PredictorData) -> u32 {
 
-	let d = data_.d;
-	let c = data_.c;
+	let line_length = data_.line_length;
+	let max_label = data_.max_label;
 
-	let data = &data_.data;
-	let rotulos = &data_.rotulos;
+	let given_points = &data_.given_points;
+	let given_labels = &data_.given_labels;
 
 
 	let mut viz = Vec::<(f64, usize)>::with_capacity(k+1);
 
-	for (linha, r) in data.chunks(d).zip(rotulos) {
+	for (point, point_label) in given_points.chunks(line_length).zip(given_labels) {
 
-		let dist = x.iter().zip(linha)
+		let dist = point_to_classify.iter().zip(point)
 					.map(|(a, b)| (a-b)*(a-b))
 					.sum();
 
-		viz.push((dist, *r as usize));
+		viz.push((dist, *point_label as usize));
 
 		viz.sort_by(|a, b| a.partial_cmp(b).unwrap());
 
 		viz.truncate(k);
 	}
 
-	let mut votos = Vec::with_capacity(c);
+	let mut votes = Vec::with_capacity(max_label);
 
-	votos.resize(c, 0);
+	votes.resize(max_label, 0);
 
 	for (_, v) in viz {
-		votos[v] += 1;
+		votes[v] += 1;
 	}
 
-	utils::argmax(&votos).0 as i32
+	utils::argmax(&votes).0 as u32
 }
 
 fn main(){
@@ -129,14 +128,14 @@ fn main(){
 
 	let now = Instant::now();
 
-	let rotulos_tests : Vec<i32> = data.test
-		.chunks(data.d)
+	let rotulos_tests : Vec<u32> = data.points_to_process
+		.chunks(data.line_length)
 		.map(|x| predict(x, k, &data))
 		.collect();
 
-	println!("Sequencial: {:?}", Instant::now().duration_since(now));
+	println!("Serial: {:?}", Instant::now().duration_since(now));
 
-	let missmatches_s = data.rotulos_test.iter()
+	let missmatches_s = data.benchmark_labels.iter()
 		.zip(rotulos_tests)
 		.filter(|&(a, b)| *a != b)
 		.count();
@@ -144,19 +143,19 @@ fn main(){
 
 	let now = Instant::now();
 
-	let rotulos_testp : Vec<i32> = data.test.as_slice()
-		.par_chunks(data.d)
+	let rotulos_testp : Vec<u32> = data.points_to_process.as_slice()
+		.par_chunks(data.line_length)
 		.map(|x| predict(x, k, &data))
 		.collect();
 
-	println!("Paralelo: {:?}", Instant::now().duration_since(now));
+	println!("Parallel: {:?}", Instant::now().duration_since(now));
 
-	let missmatches_p = data.rotulos_test.iter()
+	let missmatches_p = data.benchmark_labels.iter()
 		.zip(rotulos_testp)
 		.filter(|&(a, b)| *a != b)
 		.count();
 
-	println!("Serial   {} missmatches from {}", missmatches_s, data.rotulos_test.len());
+	println!("Serial   {} missmatches from {}", missmatches_s, data.benchmark_labels.len());
 
-	println!("Parallel {} missmatches from {}", missmatches_p, data.rotulos_test.len());
+	println!("Parallel {} missmatches from {}", missmatches_p, data.benchmark_labels.len());
 }
