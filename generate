@@ -1,0 +1,29 @@
+#!/usr/bin/env python3
+
+import sys
+import numpy as np
+
+N, M, D, C = list(map(np.uint32, sys.argv[1:5]))
+
+output = sys.argv[5]
+
+train = np.random.rand(N, D)
+train_y = np.random.randint(C, size=N, dtype=np.int32)
+
+test = np.random.rand(M, D)
+
+
+
+with open(output, "wb") as f:
+	f.write(N)
+	f.write(M)
+	f.write(D)
+	f.write(C)
+	
+	f.write(train)
+	
+	f.write(train_y)
+	
+	f.write(test)
+
+
