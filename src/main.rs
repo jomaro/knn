@@ -1,9 +1,6 @@
 
 extern crate rayon;
 extern crate byteorder;
-extern crate rulinalg;
-
-use rulinalg::utils;
 
 use rayon::prelude::*;
 
@@ -27,6 +24,23 @@ struct PredictorData {
 	given_labels : Vec<u32>,
 	points_to_process : Vec<f64>,
 	benchmark_labels : Vec<u32>,
+}
+
+fn argmax<T, Iter>(xs: Iter) -> Option<usize> where T: Copy + Ord, Iter: Iterator<Item=T> {
+	let mut argmax: Option<(usize, T)> = None;
+	for (i, x) in xs.enumerate() {
+		match argmax {
+			None => {
+				argmax = Some((i, x));
+			}
+			Some((_, y)) => {
+				if y < x {
+					argmax = Some((i, x));
+				}
+			}
+		}
+	}
+	argmax.map(|(i, _)| i)
 }
 
 fn read_files(know_points_filename : &str, classified_labels_filename : &str) -> PredictorData {
@@ -102,7 +116,7 @@ fn predict(point_to_classify : &[f64], k : usize, data_ : &PredictorData) -> u32
 		viz.truncate(k);
 	}
 
-	let mut votes = Vec::with_capacity(max_label);
+	let mut votes = Vec::<u64>::with_capacity(max_label);
 
 	votes.resize(max_label, 0);
 
@@ -110,7 +124,7 @@ fn predict(point_to_classify : &[f64], k : usize, data_ : &PredictorData) -> u32
 		votes[v] += 1;
 	}
 
-	utils::argmax(&votes).0 as u32
+	argmax(votes.iter()).unwrap() as u32
 }
 
 fn main(){
